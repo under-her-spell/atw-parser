@@ -24,8 +24,8 @@ def slugify(value, allow_unicode=False):
     return re.sub(r'[-\s]+', '-', value).strip('-_')
 
 def create_html(fullpath,title,body):
-    header='<!DOCTYPE html><html lang="en-US"><head><title>'+title+'</title><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-F3w7mX95PdgyTmZZMECAngseQB83DfGTowi0iMjiWaeVhAn4FJkqJByhZMI3AhiU" crossorigin="anonymous"><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-/bQdsTh/da6pkI1MST/rWKFNjaCP5gBSY4sEBT38Q/9RBh9AH40zEOg7Hlq2THRZ" crossorigin="anonymous"></script></head><body>'
-    footer="</body></html>"
+    header='<!DOCTYPE html><html lang="en-US"><head>\n\t<title>'+title+'</title>\n\t<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">\n\t<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-F3w7mX95PdgyTmZZMECAngseQB83DfGTowi0iMjiWaeVhAn4FJkqJByhZMI3AhiU" crossorigin="anonymous">\n\t<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-/bQdsTh/da6pkI1MST/rWKFNjaCP5gBSY4sEBT38Q/9RBh9AH40zEOg7Hlq2THRZ" crossorigin="anonymous"></script>\n</head>\n<body>'
+    footer="</body>\n</html>"
     contents = header+body+footer
     create_file(fullpath,contents)
     
@@ -81,7 +81,7 @@ def get_photos(url):
         return('')
 
 def download_photos(url,username):
-    print("\tWill download photos from "+url)
+    #print("\tWill download photos from "+url)
     html=[]
     headers =  {'User-Agent': 'Mozilla/5.0'}
     page_html = requests.get(url, headers=headers).content
@@ -102,21 +102,61 @@ def get_profile(url):
     headers =  {'User-Agent': 'Mozilla/5.0'}
     page_html = requests.get(url, headers=headers).content
     page_soup = soup(page_html, "html.parser")
+    
     #profile pic
     profile_pic=page_soup.find("img",{"class":"rounded-circle border"})
     profile_pic = profile_pic.get('src')
     download_file('atw/'+username+'/'+username+'.jpg',profile_pic)
+    html='<h2>Profile</h2><div class="container-fluid"><div class="row">\n\t<div class="col">'
+    html+='<img src="'+username+'.jpg" width="300" class="rounded">\n\t</div>\n'
+
+    #About
+    info=page_soup.find("div",{"class":"border p-4 my-4"})
+    info=info.findNext('div')
+    info_bits=info.find_all('p')
+    ln=''
+    for x in info_bits:
+    	y =x.get_text()
+    	i=0
+    	for line in y.splitlines():
+    		if i%2==0:
+    			ln+=line+":"
+    		else:
+    			ln+=line+"<br>"
+    		i+=1
+    ln=ln.replace("::",":")
     profile_candidates=page_soup.find_all('h3')
     pattern=r'About'
+    profile_text=ln
     for x in profile_candidates:
          d=re.findall(pattern,x.get_text(),re.IGNORECASE)
          if d!=[]:
              profile_text=x.findNext('div')
-    html='<h2>Profile</h2><div class="container-fluid"><div class="row">\n\t<div class="col">'
-    html+='<img src="'+username+'.jpg" width="300" class="rounded">\n\t</div>\n'
-    html+='\t<div class="col">'
-    html+=str(profile_text)
-    html+='</div></div>'
+    html+='\t<div class="col">About:\n\t'
+    if profile_text !="":
+    	html+=str(profile_text)
+    html+='\t</div>'
+    
+    #What I offer
+    profile_candidates=page_soup.find_all('h4')
+    pattern=r'What I Offer'
+    what_i_offer=''
+    for x in profile_candidates:
+         d=re.findall(pattern,x.get_text(),re.IGNORECASE)
+         if d!=[]:
+             what_i_offer=x.findNext('p').get_text()
+    offer_text='\t<div class="col">Offers:\n\t<ol>'
+    offers_present=False
+    for line in what_i_offer.splitlines():
+    	if len(line.strip()) !=0:
+    		offers_present=True
+    		offer_text+='\n\t<li>'+line.strip()+'</li>'
+    offer_text+='</ol>'
+    if offers_present:
+    	html+='\t<div class="col"'
+    	html+=str(offer_text)
+    	html+='\t</div>'
+    html+='</div>'
     return(html)
 
 def get_pages_with_listings(url,pageno):
@@ -148,7 +188,7 @@ def get_pages_with_listings(url,pageno):
         return get_pages_with_listings(url,pageno)
 
 def download_listings(url,username):
-    print("\tWill download listings from "+url)
+    #print("\tWill download listings from "+url)
     html=[]
     headers =  {'User-Agent': 'Mozilla/5.0'}
     page_html = requests.get(url, headers=headers).content
@@ -218,10 +258,14 @@ def get_listings(url):
     
 def scrap(url):
     username = extract_username(url)
-    photos = get_photos(url)
+    print("\ti) Getting profile info")
     profile = get_profile(url)
+    print("\tii) Getting photos")
+    photos = get_photos(url)
+    print("\tiii) Getting listings")  
     listings = get_listings(url)
     fullpath = 'atw/'+username+'/'+username+".html"
+    print("\tiv) Creating HTML file")
     create_html(fullpath,'atw: '+username,'<h1>'+username+'</h1>'+profile+photos+listings)
 
 def download_file(filename,url):
@@ -234,7 +278,6 @@ def create_file(filename,contents):
         my_file = open(filename,'w',encoding='utf-8')
         my_file.write(contents)
         my_file.close()
-
 
 def extract_username(url):
     gal=''
@@ -256,9 +299,44 @@ def create_dir(dir):
     except OSError as error:
         pass   #print(error)
 
-for p in sys.argv[1:]:
-    page_to_scrap = p
+def process_url(url,no):
+    page_to_scrap = url
+    print("Processing profile #"+str(no)+": "+url)
     gal=extract_username(page_to_scrap)
     create_dir('atw/'+gal)
-    # We start here
     scrap(page_to_scrap)
+    return 1
+
+def main():
+    #arguments are either a list of space-separated profile URLS 
+    opts = [opt for opt in sys.argv[1:] if opt.startswith("-")]
+    args = [arg for arg in sys.argv[1:] if not arg.startswith("-")]
+    if "-i" in opts:
+        #print(" ".join(arg.capitalize() for arg in args))
+        filename = args[0]
+        try:
+            with open(filename, 'r') as reader:
+                line = reader.readline()
+                i=1
+                successes = 0
+                while line != '':
+                    if process_url(line.strip(),i) == 1:
+                        successes +=1
+                    i+=1
+                    line = reader.readline()
+                print("Job done, "+str(successes)+" profiles scraped successfully!")
+        except FileNotFoundError:
+            print("Error: File '"+filename+"' not found!")
+    elif "-u" in opts:
+        i=1
+        successes = 0
+        for p in args:
+            if process_url(p.strip(),i) == 1:
+                successes +=1
+            i+=1
+        print("Job done, "+str(successes)+" profiles scraped successfully!")
+    else:
+        raise SystemExit(f"Usage: {sys.argv[0]} (-i | -u) <arguments>...")
+
+if __name__ == "__main__":
+    main()
